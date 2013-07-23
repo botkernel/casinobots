@@ -1,0 +1,95 @@
+<project default="jar" >
+
+    <!--
+      -
+      - Set classpath for dependencies.
+      -
+      -->
+    <path id="deps-classpath">
+        <fileset dir="..">
+            <include name="jReddit/dist/jreddit.jar" />
+            <include name="botkernel/dist/botkernel.jar" />
+            <include name="simple-cards/dist/simple-cards.jar" />
+        </fileset>
+        <fileset dir=".">
+            <include name="libs/sqlite4java-282/sqlite4java.jar" />
+        </fileset>
+    </path>
+
+    <!-- 
+      -     External dependencies 
+      -->
+    <target name="dependencies">
+        <mkdir dir="libs" />
+
+        <get src="http://sqlite4java.googlecode.com/files/sqlite4java-282.zip"
+                dest="libs"
+                usetimestamp="true" />
+
+        <unzip  src="libs/sqlite4java-282.zip"
+                dest="libs" />
+    </target>
+
+
+    <!--
+      -
+      - Clean 
+      -
+      -->
+    <target name="clean">
+        <delete dir="build" />
+        <delete dir="dist" />
+    </target>
+
+    <!-- 
+      -
+      - Compile
+      -
+      -->
+    <target name="compile" depends="dependencies" >
+        <mkdir dir="build/classes" />
+   
+        <property name="myclasspath" refid="deps-classpath" />
+        <echo message="Classpath: ${myclasspath}" />
+
+        <javac  srcdir="src" 
+                destdir="build/classes"
+                debug="true" 
+                includeantruntime="false" >
+            <classpath refid="deps-classpath"/>
+        </javac>
+    </target>
+
+    <!-- 
+      -
+      - Jar 
+      -
+      -->
+    <target name="jar" depends="compile,db-check,db-create" >
+        <mkdir dir="dist" />
+        <jar destfile="dist/botkernel.jar" basedir="build/classes" />
+
+        <!-- Copy config files -->
+        <copy todir="scratch" >
+            <fileset dir="config" >
+                <include name="*"   />
+                <include name="*/*" />
+            </fileset>
+        </copy>
+    
+    </target>
+
+    <!-- Create DB file -->
+    <target name="db-create" unless="bots.db.present">
+        <echo message="Creating bots.db database..." />
+        <exec executable="/usr/bin/sqlite3" input="bots.sql" >
+            <arg value="scratch/bots.db" />
+        </exec>
+    </target>
+
+    <!-- Check for presence of DB -->
+    <target name="db-check">
+        <available file="scratch/bots.db" property="bots.db.present" />
+    </target>
+
+</project>
