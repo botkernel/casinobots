@@ -67,7 +67,7 @@
       -->
     <target name="jar" depends="compile,db-check,db-create" >
         <mkdir dir="dist" />
-        <jar destfile="dist/botkernel.jar" basedir="build/classes" />
+        <jar destfile="dist/casinobots.jar" basedir="build/classes" />
 
         <!-- Copy config files -->
         <copy todir="scratch" >
