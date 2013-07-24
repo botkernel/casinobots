@@ -550,6 +550,15 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
                 Messages.markAsRead(_user, message);
                 continue;
             }
+
+            //
+            // Do not play over PMs.
+            //
+            if(message.getKind().equals(Thing.KIND_MESSAGE)) {
+                log("Not playing over PM for\n" + message);
+                Messages.markAsRead(_user, message);
+                continue;
+            }
  
             //
             // Get game state
