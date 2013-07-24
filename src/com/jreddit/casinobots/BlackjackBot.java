@@ -177,6 +177,17 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
 
                     String body = null;
 
+                    //
+                    // Do not consider my own posts as criteria
+                    //
+                    String author = thing.getAuthor();
+                    if( author != null &&
+                        author.equals(_user.getUsername())) {
+
+                        // log("Ignoring my own comment " + thing.getName());
+                        return false;
+                    }
+
                     if(thing instanceof Comment) {
                         Comment comment = (Comment)thing;
                         if(comment.getBody() != null) {
