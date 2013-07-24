@@ -27,6 +27,13 @@ public class PersistenceUtils {
     // sqlite> SELECT * FROM sqlite_master WHERE type='table';
     //
 
+    //
+    // Disable verbose sqlite logging
+    //
+    static {
+        java.util.logging.Logger.getLogger("com.almworks.sqlite4java").setLevel(java.util.logging.Level.OFF);
+    }
+
     private static Object DB_LOCK = new Object();
 
     /**

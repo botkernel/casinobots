@@ -527,6 +527,7 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
             String body = message.getBody().toLowerCase().trim();
 
             if(subreddit == null) {
+
                 //
                 // This is probably a PM. Could also check for t4 kind
                 // thing.getKind() == KIND_MESSAGE
@@ -559,7 +560,16 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
                 Messages.markAsRead(_user, message);
                 continue;
             }
- 
+
+            //
+            // Ensure I do not reply to messages more than once.
+            //
+            if(PersistenceUtils.isBotReplied(BOT_NAME, message.getName())) {
+                log("Not playing already replied to message\n" + message);
+                Messages.markAsRead(_user, message);
+                continue;
+            }
+
             //
             // Get game state
             //
@@ -591,6 +601,7 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
 
             if( parentBody != null &&
                 parentBody.indexOf("Game over.") != -1) {
+
                 //
                 // This game is ended. Why are they still replying to us?
                 //
@@ -605,6 +616,7 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
                                                     PARSE_DEALER_SECTION); 
             BlackjackHand playerHand = parseHand(   parent.getBody(),
                                                     PARSE_PLAYER_SECTION); 
+
             log("Playing game " + "(" + message.getSubreddit() + ")" );
             log("   " + dealerHand);
             log("   " + playerHand);
@@ -638,6 +650,7 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
                 try {
 
                     sendComment(message, output);
+                    PersistenceUtils.setBotReplied(BOT_NAME, message.getName());
                     _gamesPlayed++;
 
                 } catch(DeletedCommentException dce) {
@@ -751,6 +764,7 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
                 try {
 
                     sendComment(message, output);
+                    PersistenceUtils.setBotReplied(BOT_NAME, message.getName());
                     _gamesPlayed++;
 
                 } catch(DeletedCommentException dce) {
@@ -794,6 +808,7 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
             try {
 
                 sendComment(message, output);
+                PersistenceUtils.setBotReplied(BOT_NAME, message.getName());
 
             } catch(DeletedCommentException dce) {
 
