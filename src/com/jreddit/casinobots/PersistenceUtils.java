@@ -127,7 +127,7 @@ public class PersistenceUtils {
                 SQLiteStatement st = db.prepare(
                     "SELECT bot_name, thing_name " +
                     " FROM bot_replies " +
-                    " WHERE bot_anme = ? AND thing_name = ?");
+                    " WHERE bot_name = ? AND thing_name = ?");
 
                 try {
                     st.bind(1, botName);
