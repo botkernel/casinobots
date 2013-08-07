@@ -28,13 +28,6 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
     //
     private static final String BOT_NAME = "BLACKJACK_BOT";
 
-    private static final String CRAWLER_NAME = "BLACKJACK_CRAWLER";
-
-    //
-    // The sleep time for the Crawler we will register
-    //
-    private static final int MINUTE_SLEEP = 60;
-
     //
     // Some sleep times we will use, based on activity.
     //
@@ -55,14 +48,9 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
 
 
     //
-    // This is out crawler, which looks for new game requests.
+    // This is our crawler, which looks for new game requests.
     //
     private Crawler _crawler;
-
-    //
-    // Limit of items to retrieve at a time.
-    //
-    private static final int LIMIT = 10;
 
 
     //
@@ -84,8 +72,6 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
     private Date _startTime;
 
     private List<String> _banList;
-
-    private boolean _shutdown;
 
     //
     // Stats for this run
@@ -129,8 +115,6 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
         String username = props.getProperty("username");
         String password = props.getProperty("password");
 
-        String subreddit = props.getProperty("subreddit");
-
         _user   = new User(username, password);        
         _engine = new BlackjackEngine();
 
@@ -150,27 +134,17 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
         PersistenceUtils.loadList(BANS_FILE, _banList, -1);
         log("Loaded bans:               " + _banList.size()  );
 
-        //
-        // Create a Crawler thread we will need for crawling our own
-        // sub (i.e. RoboCasino)
-        //
-        List<String> subReddits = new ArrayList<String>();
-        subReddits.add(subreddit);
-
-        _crawler = new Crawler( _user,
-                                CRAWLER_NAME,
-                                subReddits,
-                                new Submissions.ListingType[] {
-                                        Submissions.ListingType.HOT,
-                                        Submissions.ListingType.NEW },
-                                LIMIT,
-                                MINUTE_SLEEP * 3);
+        _crawler = CasinoCrawler.getCrawler();
 
         //
         // Register ourselves with the Crawler
         //
         _crawler.addListener(this);
 
+        //
+        // Create a match criteria for the crawler to notify us
+        // when we need to respond to a post.
+        //
         CrawlerMatchCriteria criteria = new CrawlerMatchCriteria() {
                 
                 public boolean match(Thing thing) {
@@ -301,6 +275,10 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
          */
         while(true) {
 
+            if(_shutdown) {
+                return;
+            }
+
             try {
 
                 //
@@ -406,6 +384,22 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
         if(_banList.contains(thing.getSubreddit())) {
             log("Ignoring request in BANNED sub " + thing.getSubreddit());
             return;
+        }
+
+        Date d = message.getCreatedDate();
+        if(d == null) {
+            continue;
+        }
+        if(d.before(_startDate) {
+            //
+            // This message occurred before we started running.
+            //
+            // In the event that the database was destroyed since 
+            // last start, ignore these messages in order to avoid
+            // massive spamming 
+            //
+            log("Ignoring old message from " + d);
+            continue;
         }
 
         //
@@ -520,6 +514,27 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
         log("Continuing " + messages.size() + " existing game(s)...");
         
         for(Message message: messages) {
+            
+            Date d = message.getCreatedDate();
+            if(d == null) {
+                continue;
+            }
+            if(d.before(_startDate) {
+                //
+                // NOTE
+                // This message occurred before we started running.
+                // Or in other words, while we were offline, assuming
+                // we went down. 
+                //
+                // In the event that the database was destroyed since 
+                // our last start, ignore these messages in order to avoid
+                // massive spamming 
+                //
+                // Ignore this. 
+                //
+                log("Ignoring old message from " + d);
+                continue;
+            }
 
             //
             // Are we banned from here? If yes, skip it.
