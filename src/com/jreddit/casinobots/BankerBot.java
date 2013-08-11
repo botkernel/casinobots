@@ -137,7 +137,10 @@ public class BankerBot extends AbstractCasinoBot
 
                     if( body.indexOf("bankerbot credits") != -1 ||
                         body.indexOf("bankerbot balance") != -1 ||
-                        body.indexOf("bankerbot leaders") != -1 ) {
+                        body.indexOf("bankerbot leaders") != -1 ||
+                        body.indexOf("banker credits") != -1 ||
+                        body.indexOf("banker balance") != -1 ||
+                        body.indexOf("banker leaders") != -1 ) {
                         // 
                         // Found a bank request
                         //
@@ -235,11 +238,15 @@ public class BankerBot extends AbstractCasinoBot
      */
     public void handleCrawlerEvent(Thing thing) {
 
+        // log("Performing common crawler event checks.");
+
         if(!commonCrawlerEventChecks(thing)) {
             // Common crawler event checks have failed.
             // We do not want to reply to this post or submission.
             return;
         }
+
+        log("Common crawler event checks passed.");
 
         String body = null;
 
@@ -270,7 +277,8 @@ public class BankerBot extends AbstractCasinoBot
 
         String reply = "";
 
-        if( body.indexOf("bankerbot credits") != -1 ) { 
+        if( body.indexOf("bankerbot credits") != -1 ||
+            body.indexOf("banker credits") != -1 ) { 
             
             //
             // Grant credits
@@ -294,7 +302,8 @@ public class BankerBot extends AbstractCasinoBot
                 }
             }
 
-        } else if( body.indexOf("bankerbot balance") != -1 ) { 
+        } else if(  body.indexOf("bankerbot balance") != -1 || 
+                    body.indexOf("banker balance") != -1 ) { 
 
             //
             // Display balance
@@ -316,19 +325,20 @@ public class BankerBot extends AbstractCasinoBot
                 }
             }
 
-        } else if( body.indexOf("bankerbot leaders") != -1 ) {
+        } else if(  body.indexOf("bankerbot leaders") != -1 || 
+                    body.indexOf("banker leaders") != -1 ) {
 
             //
             // Display leaders
             //
             int limit = DEFAULT_LEADERS_COUNT;
 
-            String pattern = "bankerbot leaders (\\d+)";
+            String pattern = "banker(bot)? leaders (\\d+)";
             Pattern r = Pattern.compile(pattern);
             Matcher m = r.matcher(body);
             if(m.find()) {
                 try {
-                    limit = Integer.parseInt(m.group(1));
+                    limit = Integer.parseInt(m.group(2));
                 } catch(NumberFormatException nfe) {
 
                 }

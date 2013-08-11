@@ -34,8 +34,8 @@ public class BlackjackBot extends AbstractCasinoBot
     //
     // Some sleep times we will use, based on activity.
     //
-    private static final int LONG_SLEEP     = 60 * 3;
-    private static final int SHORT_SLEEP    = 30;
+    private static final int LONG_SLEEP     = 30;
+    private static final int SHORT_SLEEP    = 20;
     private static final int MICRO_SLEEP    = 10;
 
     //
@@ -414,8 +414,8 @@ public class BlackjackBot extends AbstractCasinoBot
         int bet = -1;
 
         //
-        // Check for a specified bet only in subreddits in which we will 
-        // support betting
+        // Check for a bet only in subreddits in which we will 
+        // support that feature
         //
         if(CasinoCrawler.getCrawler().containsSubreddit(thing.getSubreddit())) {
 
@@ -435,8 +435,12 @@ public class BlackjackBot extends AbstractCasinoBot
 
         String message = "";
 
+        log("Starting new game with user " + author + " bet " + bet);
+
         Object dbLock = PersistenceUtils.getDatabaseLock();
         synchronized(dbLock) {
+
+            boolean sufficientFunds = false;
 
             int bal = -1;
             if(bet != -1) {
@@ -474,12 +478,18 @@ public class BlackjackBot extends AbstractCasinoBot
                     message += "    Game over. You win!  \n";
                     PersistenceUtils.setBankBalance(author, bal + (bet*2) );
                 }
+                
+                sufficientFunds = true;
 
             } else {
+
+                sufficientFunds = false;
+
                 message = 
                     "    You do not have sufficient funds to bet " + bet + 
-                    " credit(s). Try betting less or try " +
-                    " \"bankerbot credits\" to be granted credits.  \n";
+                    " credit(s).  \n" +
+                    "    Try betting fewer credits or try " +
+                    "\"bankerbot credits\" to be granted credits.  \n";
             }
 
             //
@@ -487,11 +497,19 @@ public class BlackjackBot extends AbstractCasinoBot
             //
             try {
 
-                sendComment(thing, message);
-
-                if(bet != -1) {
+                if(bet != -1 && sufficientFunds) {
                     PersistenceUtils.setBankBalance(author, bal-bet);
                 }
+
+                if(bet == -1) {
+                    //
+                    // Don't pass author to sendComment() if we are not
+                    // playing for credits.
+                    //
+                    author = null;
+                }
+
+                sendComment(thing, message, author);
 
                 _gamesStarted++;
 
@@ -544,7 +562,12 @@ public class BlackjackBot extends AbstractCasinoBot
         for(Message message: messages) {
             
             Date d = message.getCreatedDate();
+
+            log("Checking post date " + d + " is later than start date " 
+                + _startDate);
+
             if(d == null) {
+                Messages.markAsRead(_user, message);
                 continue;
             }
             if(d.before(_startDate)) {
@@ -561,8 +584,11 @@ public class BlackjackBot extends AbstractCasinoBot
                 // Ignore this. 
                 //
                 // log("Ignoring old message from " + d);
+                Messages.markAsRead(_user, message);
                 continue;
             }
+
+            log("Checking subreddit " + message.getSubreddit());
 
             //
             // Are we banned from here? If yes, skip it.
@@ -615,6 +641,8 @@ public class BlackjackBot extends AbstractCasinoBot
                 continue;
             }
 
+            log("Checking PersistenceUtils.isBotReplied " + message.getName());
+
             //
             // Ensure I do not reply to messages more than once.
             //
@@ -623,6 +651,8 @@ public class BlackjackBot extends AbstractCasinoBot
                 Messages.markAsRead(_user, message);
                 continue;
             }
+
+            log("Getting parent comment to obtain game state.");
 
             //
             // Get game state
@@ -639,7 +669,7 @@ public class BlackjackBot extends AbstractCasinoBot
                 Messages.markAsRead(_user, message);
                 continue;
             }
-          
+         
             String parentBody = parent.getBody();
 
             if( parentBody == null ) {
@@ -652,6 +682,8 @@ public class BlackjackBot extends AbstractCasinoBot
                 Messages.markAsRead(_user, message);
                 continue;
             }
+
+            log("Checking for finished game.");
 
             if( parentBody != null &&
                 parentBody.indexOf("Game over.") != -1) {
@@ -669,6 +701,8 @@ public class BlackjackBot extends AbstractCasinoBot
             String player = null;
             int bet = -1;
 
+            log("Looking for player info.");
+
             //
             // Parse player and bet.
             //
@@ -684,16 +718,28 @@ public class BlackjackBot extends AbstractCasinoBot
                 }
             }
 
+            log("Found player and bet " + player + " " + bet);
+
             if( player == null || bet == -1 ) {
                 // 
                 // We must not be playing a game for credits.
                 //
-                log("Playing game without credit bet.");
+                log("Playing game without credit bet for:\n" + parentBody);
+
             } else {
+
                 //
                 // We are playing a game for credits.
-                // Ensure this is the correct user to reply to.
+                // Ensure this is the correct user to reply to and that we
+                // have not already played this turn.
                 //
+             
+                if(PersistenceUtils.isBotReplied(BOT_NAME, parent.getName())) {
+                    log("Already played this turn for " + message);
+                    Messages.markAsRead(_user, message);
+                    continue;
+                }
+
                 if(!message.getAuthor().equals(player)) {
                     //
                     // This is not a reply from the player, ignore it.
@@ -742,7 +788,17 @@ public class BlackjackBot extends AbstractCasinoBot
                 //
                 try {
 
-                    sendComment(message, output);
+                    if(bet == -1) {
+                        // Don't send player info to sendComment() if
+                        // we are not playing for credits.
+                        player = null;
+                    }
+
+                    sendComment(message, output, player);
+                    if(bet != -1) {
+                        PersistenceUtils.setBotReplied( BOT_NAME, 
+                                                        parent.getName());
+                    }
                     PersistenceUtils.setBotReplied(BOT_NAME, message.getName());
                     _gamesPlayed++;
 
@@ -822,8 +878,8 @@ public class BlackjackBot extends AbstractCasinoBot
                     dealerHand = (BlackjackHand)_engine.dealCard(dealerHand);
                     output += createGameOutput( dealerHand, 
                                                 playerHand,
-                                                player,
-                                                bet );
+                                                null,
+                                                -1 );
                     
                     log("   ...");
                     log("   " + dealerHand);
@@ -832,10 +888,21 @@ public class BlackjackBot extends AbstractCasinoBot
 
                 if(dealerHand.isBusted()) {
                     //
-                    // I lose. 
+                    // Dealer busts
                     //
                     output += "    ...  \n";
                     output += "    Game over. You win!  \n";
+
+                    Object dbLock = PersistenceUtils.getDatabaseLock();
+                    if(bet != -1) {
+                        synchronized(dbLock) {
+                            int oldBal = PersistenceUtils.getBankBalance(
+                                                                player );
+                            PersistenceUtils.setBankBalance(player, 
+                                                            oldBal + (bet*2));
+                        }
+                    }
+
                 } else {
                     //
                     // Check scores.
@@ -843,13 +910,45 @@ public class BlackjackBot extends AbstractCasinoBot
                     int playerVal = playerHand.getValues()[0].intValue();
                     int dealerVal = dealerHand.getValues()[0].intValue();
                     if(playerVal == dealerVal) {
+
+                        // Push
+
                         output += "    ...  \n";
                         output += "    Game over. Push.  \n";
+
+                        Object dbLock = PersistenceUtils.getDatabaseLock();
+                        if(bet != -1) {
+                            synchronized(dbLock) {
+                                int oldBal = PersistenceUtils.getBankBalance(
+                                                                player );
+                                PersistenceUtils.setBankBalance(player, 
+                                                            oldBal + (bet));
+                            }
+                        }
+
                     } else {
+
+                        // Player wins
+
                         if(playerVal > dealerVal) {
                             output += "    ...  \n";
                             output += "    Game over. You win!  \n";
+                   
+                            Object dbLock = PersistenceUtils.getDatabaseLock();
+                            if(bet != -1) {
+                                synchronized(dbLock) {
+                                    int oldBal = 
+                                        PersistenceUtils.getBankBalance(
+                                                                player );
+                                    PersistenceUtils.setBankBalance(player, 
+                                                            oldBal + (bet*2));
+                                }
+                            }
+
                         } else {
+
+                            // Player loses
+
                             output += "    ...  \n";
                             output += "    Game over. You lose.  \n";
                         }
@@ -860,8 +959,18 @@ public class BlackjackBot extends AbstractCasinoBot
                 // Send the output game state to the user.
                 //
                 try {
+                    
+                    if(bet == -1) {
+                        // Don't send player to sendCOmment() if we are
+                        // not playing for credits.
+                        player = null;
+                    }
 
-                    sendComment(message, output);
+                    sendComment(message, output, player);
+                    if(bet != -1) {
+                        PersistenceUtils.setBotReplied( BOT_NAME, 
+                                                        parent.getName());
+                    }
                     PersistenceUtils.setBotReplied(BOT_NAME, message.getName());
                     _gamesPlayed++;
 
@@ -908,7 +1017,17 @@ public class BlackjackBot extends AbstractCasinoBot
             
             try {
 
-                sendComment(message, output);
+                if(bet == -1) {
+                    // Don't send player info to sendComment() if
+                    // we are not playing for credits.
+                    player = null;
+                }
+
+                sendComment(message, output, player);
+                if(bet != -1) {
+                    PersistenceUtils.setBotReplied( BOT_NAME, 
+                                                    parent.getName());
+                }
                 PersistenceUtils.setBotReplied(BOT_NAME, message.getName());
 
             } catch(DeletedCommentException dce) {
@@ -990,7 +1109,28 @@ public class BlackjackBot extends AbstractCasinoBot
     /**
      * Send a comment, append the bot's signature.
      */
-    private void sendComment(Thing thing, String text) throws IOException {
+    private void sendComment(Thing thing, String text, String player) 
+                                                    throws IOException {
+        int bal = -1; 
+        if(player != null) { 
+            Object dbLock = PersistenceUtils.getDatabaseLock();
+            synchronized(dbLock) {
+                bal = PersistenceUtils.getBankBalance( player );
+            }
+
+            if(bal > 0) {
+                text += "\n\n" +
+                    "|Credits\n" + 
+                    "|---:\n" + 
+                    "|" + bal + "\n";
+            } else {
+                text += "\n\n" +
+                    "|Credits\n" + 
+                    "|---:\n" + 
+                    "|0\n";
+            }
+        }
+
         text += "\n\n" +
                 "----\n" +
                 "Commands: hit, stand | " +
