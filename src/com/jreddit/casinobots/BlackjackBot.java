@@ -419,12 +419,12 @@ public class BlackjackBot extends AbstractCasinoBot
         //
         if(CasinoCrawler.getCrawler().containsSubreddit(thing.getSubreddit())) {
 
-            String pattern = "blackjack (\\d+)";
+            String pattern = "blackjack(bot)? (\\d+)";
             Pattern r = Pattern.compile(pattern);
             Matcher m = r.matcher(body);
             if(m.find()) {
                 try {
-                    bet = Integer.parseInt(m.group(1));
+                    bet = Integer.parseInt(m.group(2));
                 } catch(NumberFormatException nfe) {
     
                 }
@@ -560,7 +560,7 @@ public class BlackjackBot extends AbstractCasinoBot
                 //
                 // Ignore this. 
                 //
-                log("Ignoring old message from " + d);
+                // log("Ignoring old message from " + d);
                 continue;
             }
 

@@ -31,7 +31,7 @@ public class CasinoCrawler extends Crawler {
     //
     // The sleep time for the Crawler we will register
     //
-    private static final int MINUTE_SLEEP = 60;
+    private static final int SLEEP = 30;
 
     //
     // Limit of items to retrieve at a time.
@@ -102,7 +102,7 @@ public class CasinoCrawler extends Crawler {
                                         Submissions.ListingType.HOT,
                                         Submissions.ListingType.NEW },
                                 LIMIT,
-                                MINUTE_SLEEP * 3);
+                                SLEEP);
         return _crawler;
     }
 

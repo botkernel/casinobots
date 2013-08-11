@@ -46,6 +46,14 @@ public abstract class AbstractCasinoBot extends BaseBot  {
     protected void initProps(Properties props) {
 
         //
+        // Get user info from properties file
+        //
+        String username = props.getProperty("username");
+        String password = props.getProperty("password");
+
+        _user   = new User(username, password);
+
+        //
         // The oldest date at which this bot will respond to
         // either messages or crawler hits. This prevents us from spamming
         // old messages or hits if the kernel daemon is stopped and then 
@@ -73,14 +81,6 @@ public abstract class AbstractCasinoBot extends BaseBot  {
             log("Could not find last comment posted for " + 
                 _user.getUsername());
         }
-
-        //
-        // Get user info from properties file
-        //
-        String username = props.getProperty("username");
-        String password = props.getProperty("password");
-
-        _user   = new User(username, password);
 
         String ignoreUsers = props.getProperty("ignoreUsers");
         if(ignoreUsers != null) {
@@ -117,7 +117,7 @@ public abstract class AbstractCasinoBot extends BaseBot  {
             // last start, ignore these messages in order to avoid
             // massive spamming
             //
-            log("Ignoring old message from " + d);
+            // log("Ignoring old message from " + d);
             return false;
         }
 

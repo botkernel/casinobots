@@ -233,7 +233,7 @@ public class PersistenceUtils {
                 db.open(true);
 
                 SQLiteStatement st = db.prepare(
-                    "SELECT player_name, balance " +
+                    "SELECT balance " +
                     " FROM bank " +
                     " WHERE player_name = ?");
 

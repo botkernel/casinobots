@@ -266,6 +266,8 @@ public class BankerBot extends AbstractCasinoBot
 
         String author = thing.getAuthor();
 
+        log("Banking for user " + author);
+
         String reply = "";
 
         if( body.indexOf("bankerbot credits") != -1 ) { 
@@ -336,13 +338,16 @@ public class BankerBot extends AbstractCasinoBot
                 limit = MAX_LIMIT;
             }
 
-            reply += "    Top " + limit + " players:  \n";
+            reply += "Top " + limit + " players:\n\n";
+            
+            reply += "Rank|Player|Credits\n";
+            reply += "---:|:--|---:\n";
 
             AccountInfo[] leaders = PersistenceUtils.getBankLeaders(limit);
             for(int i = 0; i < leaders.length; i++) {
                 reply += 
-                    "    " + (i+1) + " " + leaders[i].getName() +
-                        " " + leaders[i].getBalance() + "  \n";
+                    "" + (i+1) + "|" + leaders[i].getName() +
+                        "|" + leaders[i].getBalance() + "\n";
             }
         }
 
