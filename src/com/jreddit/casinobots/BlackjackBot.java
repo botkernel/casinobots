@@ -2,6 +2,8 @@ package com.jreddit.casinobots;
 
 import java.io.*;
 import java.util.*;
+import java.util.regex.*;
+
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 
@@ -16,7 +18,8 @@ import com.jreddit.botkernel.*;
  * Reddit BlackjackBot
  *
  */
-public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
+public class BlackjackBot extends AbstractCasinoBot 
+                            implements Bot, CrawlerListener {
 
     //
     // String representing back of a card. I.e. card face not visible.
@@ -48,12 +51,6 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
 
 
     //
-    // This is our crawler, which looks for new game requests.
-    //
-    private Crawler _crawler;
-
-
-    //
     // Config files for our properties and
     // bans.
     // NOTE these paths are relative to the botkernel working directory,
@@ -64,7 +61,6 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
     private static final String CONFIG_FILE = 
                         "../casinobots/scratch/blackjackbot/config.properties";
 
-    private User            _user;
     private BlackjackEngine _engine;
 
     private int _activeCycles;
@@ -109,13 +105,8 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
             log("ERROR init()'ing " + BOT_NAME);
         }
 
-        //
-        // Get user info from properties file
-        //
-        String username = props.getProperty("username");
-        String password = props.getProperty("password");
+        initProps(props);
 
-        _user   = new User(username, password);        
         _engine = new BlackjackEngine();
 
         _startTime      = new Date();
@@ -367,7 +358,7 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
 
     /**
      *
-     * To implement CrawlerListener
+     * Implement CrawlerListener.
      *
      * This should be a new game request.
      *
@@ -386,105 +377,142 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
             return;
         }
 
-        Date d = message.getCreatedDate();
-        if(d == null) {
-            continue;
-        }
-        if(d.before(_startDate) {
-            //
-            // This message occurred before we started running.
-            //
-            // In the event that the database was destroyed since 
-            // last start, ignore these messages in order to avoid
-            // massive spamming 
-            //
-            log("Ignoring old message from " + d);
-            continue;
-        }
-
-        //
-        // Make sure some other finder thread didn't add
-        // this game and start it.
-        //
-        if(PersistenceUtils.isBotReplied(BOT_NAME, thing.getName())) {
-            log("Ignoring already started game: " + thing);
-            return; 
-        }
-
-        // Ignore my own comments.
-        String author = thing.getAuthor();
-        if( author != null &&
-            author.equals(_user.getUsername())) {
-
-            // log("  Not considering my own comment for " +
-            //    "matching game start text...");
+        if(!commonCrawlerEventChecks(thing)) {
+            // Common crawler event checks have failed. 
+            // We do not want to reply to this post or submission.
             return;
         }
 
-        // Debug
+        String body = null;
+
         if(thing instanceof Comment) {
-                log("Starting game from comment with: " + 
-                                ((Comment)thing).getAuthor());
+            Comment comment = (Comment)thing;
+            if(comment.getBody() != null) {
+                body = ((Comment)comment).getBody().toLowerCase();
+                log("Starting game from comment with: " + body);
+            }
         }
 
-        // Debug
         if(thing instanceof Submission) {
-                log("Starting game from submission with: " + 
-                                ((Submission)thing).getAuthor());
+            Submission submission = (Submission)thing;
+            if( submission.isSelfPost() &&
+                submission.getSelftext() != null) {
+                            
+                body = submission.getSelftext().toLowerCase();
+                log("Starting game from submission with: " + body);
+            }
+        }
+
+        if(body == null) {
+            return;
         }
 
         //
-        // Get the dealer's hand
+        // Still allow for backwards compatibility and playing without 
+        // betting in the casino.
         //
-        BlackjackHand dealerHand = 
-            new BlackjackHand( new BlackjackCard[] { _engine.dealCard() } );
+        int bet = -1;
+
+        //
+        // Check for a specified bet only in subreddits in which we will 
+        // support betting
+        //
+        if(CasinoCrawler.getCrawler().containsSubreddit(thing.getSubreddit())) {
+
+            String pattern = "blackjack (\\d+)";
+            Pattern r = Pattern.compile(pattern);
+            Matcher m = r.matcher(body);
+            if(m.find()) {
+                try {
+                    bet = Integer.parseInt(m.group(1));
+                } catch(NumberFormatException nfe) {
+    
+                }
+            }
+        }
+
+        String author = thing.getAuthor();
+
+        String message = "";
+
+        Object dbLock = PersistenceUtils.getDatabaseLock();
+        synchronized(dbLock) {
+
+            int bal = -1;
+            if(bet != -1) {
+                bal = PersistenceUtils.getBankBalance(author);
+            }
+
+            if(bet == -1 || bal >= bet) {
+
+
+                //
+                // Get the dealer's hand
+                //
+                BlackjackHand dealerHand = 
+                    new BlackjackHand( 
+                            new BlackjackCard[] { _engine.dealCard() } );
          
-        //
-        // Get the player's hand
-        //
-        BlackjackHand playerHand = (BlackjackHand)_engine.dealHand();
+                //
+                // Get the player's hand
+                //
+                BlackjackHand playerHand = (BlackjackHand)_engine.dealHand();
         
-        //
-        // Create message for player
-        //
-        String message = createGameOutput(dealerHand, playerHand);
+                //
+                // Create message for player
+                //
+                message = createGameOutput( dealerHand, playerHand, 
+                                            author, bet);
            
-        //
-        // See if we just dealt them a blackjack.
-        // If yes, they win.
-        // Append message to player with winner info.
-        //
-        if(playerHand.isBlackjack()) {
-                message += "    ...  \n";
-                message += "    Game over. You win!  \n";
-        }
+                //
+                // See if we just dealt them a blackjack.
+                // If yes, they win.
+                // Append message to player with winner info.
+                //
+                if(playerHand.isBlackjack()) {
+                    message += "    ...  \n";
+                    message += "    Game over. You win!  \n";
+                    PersistenceUtils.setBankBalance(author, bal + (bet*2) );
+                }
 
-        //
-        // Reply to player.
-        //
-        try {
-
-            sendComment(thing, message);
-
-            _gamesStarted++;
-
-        } catch(DeletedCommentException dce) {
-
-            log("Ignoring deleted item... " + thing);
-
-        } catch(BannedUserException ioe) {
-
-            String subreddit = thing.getSubreddit();
-            addBan(subreddit);
-
-        } catch(IOException ioe) {
-
-            ioe.printStackTrace(); 
+            } else {
+                message = 
+                    "    You do not have sufficient funds to bet " + bet + 
+                    " credit(s). Try betting less or try " +
+                    " \"bankerbot credits\" to be granted credits.  \n";
+            }
 
             //
-            // Some other error replying to comment...
+            // Reply to player.
             //
-            log("ERROR replying to:\n" + thing);
+            try {
+
+                sendComment(thing, message);
+
+                if(bet != -1) {
+                    PersistenceUtils.setBankBalance(author, bal-bet);
+                }
+
+                _gamesStarted++;
+
+            } catch(DeletedCommentException dce) {
+
+                log("Ignoring deleted item... " + thing);
+
+            } catch(BannedUserException ioe) {
+
+                String subreddit = thing.getSubreddit();
+                addBan(subreddit);
+
+            } catch(IOException ioe) {
+
+                ioe.printStackTrace(); 
+
+                //
+                // Some other error replying to comment...
+                //
+                log("ERROR replying to:\n" + thing);
+            }
         }
 
         //
@@ -519,7 +547,7 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
             if(d == null) {
                 continue;
             }
-            if(d.before(_startDate) {
+            if(d.before(_startDate)) {
                 //
                 // NOTE
                 // This message occurred before we started running.
@@ -632,10 +660,47 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
                 // This game is ended. Why are they still replying to us?
                 //
                 log("Skipping already finished game for reply: " + body
-                    + " (author: " + parent.getAuthor() + ")" );
+                    + " (author: " + message.getAuthor() + ")" );
 
                 Messages.markAsRead(_user, message);
                 continue;
+            }
+
+            String player = null;
+            int bet = -1;
+
+            //
+            // Parse player and bet.
+            //
+            String pattern = "Player: (\\S+) bet: (\\d+) credit";
+            Pattern r = Pattern.compile(pattern);
+            Matcher m = r.matcher(parentBody);
+            if(m.find()) {
+                player = m.group(1);
+                try {
+                    bet = Integer.parseInt(m.group(2));
+                } catch( NumberFormatException nfe ) {
+                    // Not much to do here, check for -1 as bet later.
+                }
+            }
+
+            if( player == null || bet == -1 ) {
+                // 
+                // We must not be playing a game for credits.
+                //
+                log("Playing game without credit bet.");
+            } else {
+                //
+                // We are playing a game for credits.
+                // Ensure this is the correct user to reply to.
+                //
+                if(!message.getAuthor().equals(player)) {
+                    //
+                    // This is not a reply from the player, ignore it.
+                    //
+                    Messages.markAsRead(_user, message);
+                    continue;
+                }
             }
 
             BlackjackHand dealerHand = parseHand(   parent.getBody(),
@@ -661,7 +726,9 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
                 playerHand = (BlackjackHand)_engine.dealCard(playerHand);
 
                 String output = createGameOutput(   dealerHand, 
-                                                    playerHand  );
+                                                    playerHand,
+                                                    player,
+                                                    bet );
                 if(playerHand.isBusted()) {
                     output += "    ...  \n";
                     output += "    Game over. You lose.  \n";
@@ -727,7 +794,9 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
                 //
                 dealerHand = (BlackjackHand)_engine.dealCard(dealerHand);
                 String output = createGameOutput(   dealerHand, 
-                                                    playerHand );
+                                                    playerHand,
+                                                    player,
+                                                    bet );
 
                 log("   ...");
                 log("   " + dealerHand);
@@ -751,7 +820,10 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
                     output += "    ...  \n";
 
                     dealerHand = (BlackjackHand)_engine.dealCard(dealerHand);
-                    output += createGameOutput( dealerHand, playerHand );
+                    output += createGameOutput( dealerHand, 
+                                                playerHand,
+                                                player,
+                                                bet );
                     
                     log("   ...");
                     log("   " + dealerHand);
@@ -826,7 +898,10 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
             // No supported actions (hit, stay) were detected.
             // Send the output 
             //
-            String output = createGameOutput( dealerHand, playerHand );
+            String output = createGameOutput(   dealerHand, 
+                                                playerHand, 
+                                                player, 
+                                                bet         );
             output += "    ...  \n";
             output += "    Sorry, I don't understand. " +
                         "Try 'hit' or 'stand'.  \n";
@@ -887,22 +962,14 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
 
     /**
      *
-     * Draw the game board. This will be the text of the post 
-     * we reply to the user with.
-     */
-    private String createGameOutput(Hand dealerHand, 
-                                    Hand playerHand ) {
-        return createGameOutput(dealerHand, playerHand, (String)null);
-    }
-
-    /**
-     *
      * Draw the board. This will be the text of the post 
      * we reply to the user with.
      */
     private String createGameOutput(Hand dealerHand, 
                                     Hand playerHand, 
-                                    String message) {
+                                    String player,
+                                    int bet ) {
+
         String ret = "";
         if(dealerHand.getCards().length == 1) {
             ret += "    Dealer hand: " + CARD_BACK + " " + dealerHand + "  \n";
@@ -911,10 +978,11 @@ public class BlackjackBot extends BaseBot implements Bot, CrawlerListener {
         }
         ret += "    Player hand: " + playerHand + "  \n";
 
-        if(message != null) {
-            ret += "    " + message + "  \n";
+        if( player != null && bet != -1 ) {
+            ret += "  \n";
+            ret += "    Player: " + player + " bet: " + bet + " credit(s)\n";
         }
-        
+
         return ret;
     }
 

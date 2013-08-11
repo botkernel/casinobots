@@ -276,14 +276,14 @@ public class PersistenceUtils {
                 SQLiteConnection db = new SQLiteConnection(new File(DB_FILE));
                 db.open(true);
 
-                int balance = getBankBalance(player);
+                int existingBal = getBankBalance(player);
 
                 SQLiteStatement st = null;
                
                 
                 try {
                 
-                    if(balance == -1) {
+                    if(existingBal == -1) {
                         st = db.prepare(
                             "INSERT INTO bank (player_name, balance) " +
                             " VALUES (?, ?)" );
@@ -292,7 +292,7 @@ public class PersistenceUtils {
                     } else {
                         st = db.prepare(
                             "UPDATE bank SET balance = ? " +
-                            " WHERE player_name = ?";
+                            " WHERE player_name = ?");
                         st.bind(1, balance);
                         st.bind(2, player);
                     }
@@ -337,14 +337,14 @@ public class PersistenceUtils {
                 SQLiteStatement st = db.prepare(
                     "SELECT player_name, balance " +
                     " FROM bank " +
-                    " ORDER BY balance DESC LIMIT ?";
+                    " ORDER BY balance DESC LIMIT ?");
                 
                 try {
                     st.bind(1, limit);
                     while(st.step()) {
                         String name = st.columnString(0);
                         int bal = st.columnInt(1);
-                        AccoutnInfo info = new AccountInfo(name, bal);
+                        AccountInfo info = new AccountInfo(name, bal);
                         ret.add(info);
                     } 
                 } finally {

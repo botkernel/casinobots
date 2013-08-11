@@ -14,7 +14,8 @@ import com.jreddit.botkernel.*;
  * BankerBot
  *
  */
-public class BankerBot extends BaseBot implements Bot, CrawlerListener {
+public class BankerBot extends AbstractCasinoBot 
+                        implements Bot, CrawlerListener {
 
     //
     // Unique bot name
@@ -29,7 +30,7 @@ public class BankerBot extends BaseBot implements Bot, CrawlerListener {
     //
     // Default number of leaders to display
     //
-    private static final int DEFAULT_LEADER_COUNT = 10;
+    private static final int DEFAULT_LEADERS_COUNT = 10;
 
     //
     // Max limit when displaying leaders
@@ -44,7 +45,6 @@ public class BankerBot extends BaseBot implements Bot, CrawlerListener {
     private static final String CONFIG_FILE = 
                         "../casinobots/scratch/bankerbot/config.properties";
 
-    private User            _user;
 
     /**
      *
@@ -77,13 +77,7 @@ public class BankerBot extends BaseBot implements Bot, CrawlerListener {
             log("ERROR init()'ing " + BOT_NAME);
         }
 
-        //
-        // Get user info from properties file
-        //
-        String username = props.getProperty("username");
-        String password = props.getProperty("password");
-
-        _user   = new User(username, password);        
+        initProps(props);
 
         // Connect
         try {
@@ -215,7 +209,7 @@ public class BankerBot extends BaseBot implements Bot, CrawlerListener {
             // Connect
             //
             try {
-                user.connect();
+                _user.connect();
             } catch (IOException ioe) {
                 ioe.printStackTrace();
                 log("Error cannot connect.");
@@ -241,35 +235,9 @@ public class BankerBot extends BaseBot implements Bot, CrawlerListener {
      */
     public void handleCrawlerEvent(Thing thing) {
 
-        //
-        // Ignore already handled requests
-        //
-        if(PersistenceUtils.isBotReplied(BOT_NAME, thing.getName())) {
-            // log("Ignoring already handled request: " + thing);
-            return;
-        }                                }
-
-        Date d = message.getCreatedDate();
-        if(d == null) {
-            continue;
-        }
-        if(d.before(_startDate) {
-            log("Ignoring old message from " + d);
-            continue;
-        }
-
-
-        // Ignore my own comments.
-        String author = thing.getAuthor();
-        if( author != null &&
-            author.equals(_user.getUsername())) {
-
-            // log("  Not considering my own comment.");
-            return;
-        }
-
-        // if author is null (deleted?) can't do anything
-        if(author == null) {
+        if(!commonCrawlerEventChecks(thing)) {
+            // Common crawler event checks have failed.
+            // We do not want to reply to this post or submission.
             return;
         }
 
@@ -286,13 +254,17 @@ public class BankerBot extends BaseBot implements Bot, CrawlerListener {
             Submission submission = (Submission)thing;
             if( submission.isSelfPost() &&
                 submission.getSelftext() != null) {
-            body = submission.getSelftext().toLowerCase();
+            
+                body = submission.getSelftext().toLowerCase();
+            }
         }
 
         // If this is still null, don't know what this is. Ignore it.
         if(body == null) {
             return;
         }
+
+        String author = thing.getAuthor();
 
         String reply = "";
 
@@ -355,7 +327,7 @@ public class BankerBot extends BaseBot implements Bot, CrawlerListener {
             if(m.find()) {
                 try {
                     limit = Integer.parseInt(m.group(1));
-                } catch(NumebrFormatException nfe) {
+                } catch(NumberFormatException nfe) {
 
                 }
             }
@@ -408,7 +380,9 @@ public class BankerBot extends BaseBot implements Bot, CrawlerListener {
 
 
     /**
+     *
      * Send a comment, append the bot's signature.
+     *
      */
     private void sendComment(Thing thing, String text) throws IOException {
         text += "\n\n" +
@@ -421,22 +395,6 @@ public class BankerBot extends BaseBot implements Bot, CrawlerListener {
                 // "^^Please ^^remember ^^to ^^tip ^^your ^^dealer  \n";
 
         Comments.comment(_user, thing, text);
-    }
-
-
-    /**
-     * Return a String representation of the ban set.
-     */
-    private String getBanListAsString() {
-        String ret = "";
-        for(String subreddit: _banList) {
-            if(ret.equals("")) {
-                ret = subreddit;
-            } else {
-                ret += ", " + subreddit;
-            }
-        }
-        return ret;
     }
 
 
