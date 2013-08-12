@@ -38,6 +38,11 @@ public class BankerBot extends AbstractCasinoBot
     private static final int MAX_LIMIT = 100;
 
     //
+    // Retry limit for RateLimitException
+    //
+    private static final int RETRY_LIMIT = 5;
+
+    //
     // Config file(s)
     // NOTE these paths are relative to the botkernel working directory,
     // as we do not run the bot from here.
@@ -361,36 +366,65 @@ public class BankerBot extends AbstractCasinoBot
             }
         }
 
-        //
-        // Reply to request.
-        //
-        try {
 
-            sendComment(thing, reply);
+        for(int retry = 0; retry < RETRY_LIMIT; retry++) {
 
-        } catch(DeletedCommentException dce) {
+            boolean setReplied = true;
 
-            log("Ignoring deleted item... " + thing);
+            //
+            // Reply to request.
+            //
+            try {
 
-        } catch(BannedUserException ioe) {
+                sendComment(thing, reply);
+
+            } catch(DeletedCommentException dce) {
+
+                log("Ignoring deleted item... " + thing);
+
+            } catch(BannedUserException ioe) {
            
-            ioe.printStackTrace();
+                ioe.printStackTrace();
 
-        } catch(IOException ioe) {
-
-            ioe.printStackTrace(); 
+            } catch(RateLimitException rle) {
+            
+                // rle.printStackTrace();
+                log("Caught RateLimitException: " + rle.getMessage());
+    
+                int sleepSecs = rle.getRetryTime();
+    
+                log("Sleeping " + sleepSecs +
+                        " seconds to recover from rate limit exception...");
+    
+                sleep(sleepSecs);
+                
+                setReplied = false;
+    
+            } catch(IOException ioe) {
+    
+                ioe.printStackTrace(); 
+    
+                //
+                // Some other error replying to comment...
+                //
+                log("ERROR replying to:\n" + thing);
+            }
+    
+            //
+            // Mark message as replied.
+            //
+            if(setReplied) {
+                PersistenceUtils.setBotReplied(BOT_NAME, thing.getName());
+                break;
+            } 
 
             //
-            // Some other error replying to comment...
+            // Retry after catching RateLimitException
             //
-            log("ERROR replying to:\n" + thing);
+            log("Caught RateLimitException. Retry " + (retry+1) );
+
         }
 
-        //
-        // Mark message as replied.
-        //
-        PersistenceUtils.setBotReplied(BOT_NAME, thing.getName());
- 
     }
 
 

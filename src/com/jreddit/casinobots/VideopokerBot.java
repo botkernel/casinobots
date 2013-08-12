@@ -15,55 +15,31 @@ import com.jreddit.botkernel.*;
 
 /**
  *
- * Reddit BlackjackBot
+ * Reddit VideopokerBot
  *
  */
-public class BlackjackBot extends AbstractCasinoBot 
+public class VideopokerBot extends AbstractCasinoBot 
                             implements Bot, CrawlerListener {
-
-    //
-    // String representing back of a card. I.e. card face not visible.
-    //
-    private static final String CARD_BACK = "██";
 
     //
     // Unique bot name
     //
-    private static final String BOT_NAME = "BLACKJACK_BOT";
+    private static final String BOT_NAME = "VIDEOPOKER_BOT";
 
     //
-    // Some sleep times we will use, based on activity.
+    // Default sleep time when checking for replies
     //
-    private static final int LONG_SLEEP     = 30;
-    private static final int SHORT_SLEEP    = 20;
-    private static final int MICRO_SLEEP    = 10;
+    private static final int SLEEP = 10; 
 
     //
-    // Sleep transition threshold
-    // How many short sleeps we will do before entering long sleep.
-    // (I.e. before becoming "inactive".)
+    // Config files for our properties 
     //
-    private static final int INACTIVITY_THRESHOLD = 8;
-
-
-    //
-    // Config files for our properties and
-    // bans.
-    // NOTE these paths are relative to the botkernel working directory,
-    // as we do not run the bot from here.
-    //
-    private static final String BANS_FILE = 
-                        "../casinobots/scratch/blackjackbot/bans.txt";
     private static final String CONFIG_FILE = 
-                        "../casinobots/scratch/blackjackbot/config.properties";
+                    "../casinobots/scratch/videopokerbot/config.properties";
 
-    private BlackjackEngine _engine;
-
-    private int _activeCycles;
+    private PokerEngine _engine;
 
     private Date _startTime;
-
-    private List<String> _banList;
 
     //
     // Stats for this run
@@ -76,7 +52,7 @@ public class BlackjackBot extends AbstractCasinoBot
      * Provide a default no argument constructor
      *
      */
-    public BlackjackBot() { }
+    public VideopokerBot() { }
 
     /**
      *
@@ -92,7 +68,7 @@ public class BlackjackBot extends AbstractCasinoBot
         
         Properties props = new Properties();
         try {
-            log("Loading blackjack config properties...");
+            log("Loading videopoker bot config properties...");
             FileInputStream in = new FileInputStream(CONFIG_FILE);
             props.load(in);
             in.close();
@@ -103,10 +79,9 @@ public class BlackjackBot extends AbstractCasinoBot
 
         initProps(props);
 
-        _engine = new BlackjackEngine();
+        _engine = new PokerEngine();
 
         _startTime      = new Date();
-        _banList        = new ArrayList<String>();
 
         // Connect
         try {
@@ -116,12 +91,26 @@ public class BlackjackBot extends AbstractCasinoBot
         }
 
         //
-        // Init bans from file.
+        //  TODO user a temp crawler for now.
         //
-        PersistenceUtils.loadList(BANS_FILE, _banList, -1);
-        log("Loaded bans:               " + _banList.size()  );
+        // _crawler = CasinoCrawler.getCrawler();
+       
 
-        _crawler = CasinoCrawler.getCrawler();
+        //
+        // TODO don't use test crawler.
+        //
+        List<String> subReddits = new ArrayList<String>();
+        subReddits.add("BlackjackBot");
+        _crawler = new Crawler(
+                                _user,
+                                "TEST_CRAWLER",
+                                subReddits,
+                                new Submissions.ListingType[] {
+                                        Submissions.ListingType.HOT,
+                                        Submissions.ListingType.NEW },
+                                10,
+                                10  );
+
 
         //
         // Register ourselves with the Crawler
@@ -170,7 +159,7 @@ public class BlackjackBot extends AbstractCasinoBot
                         return false;
                     }
 
-                    if(body.indexOf("blackjack") != -1) {
+                    if( body.indexOf("poker") != -1 ) {
 
                         //
                         // We match.
@@ -189,7 +178,7 @@ public class BlackjackBot extends AbstractCasinoBot
                 }
 
                 public CrawlerListener getCrawlerListener() {
-                    return BlackjackBot.this;
+                    return VideopokerBot.this;
                 }
             };
 
@@ -239,29 +228,25 @@ public class BlackjackBot extends AbstractCasinoBot
 
         Date lastActivity = new Date();
 
-        //
-        // Connect
-        //
-        try {
-            _user.connect();
-        } catch (IOException ioe) {
-            ioe.printStackTrace();
-            log("Error cannot connect.");
-            return;
-        }
-
-        //
-        // Start our cycle count for inactivity checking.
-        //
-        _activeCycles = 0;
-
         /**
          *  Main loop
          */
         while(true) {
-
+        
             if(_shutdown) {
                 return;
+            }
+
+            //
+            // Connect
+            //
+            try {
+                _user.connect();
+            } catch (IOException ioe) {
+                ioe.printStackTrace();
+                log("Error cannot connect.");
+                sleep(SLEEP * 2);
+                continue;
             }
 
             try {
@@ -276,57 +261,16 @@ public class BlackjackBot extends AbstractCasinoBot
 
 
                 //
-                // DEBUG
-                //
-                // break;
-                
-                // log("Active cycles " + _activeCycles + 
-                //    ", deep sleep threshold " + INACTIVITY_THRESHOLD);
-
-                int sleep = SHORT_SLEEP;
-                if(messages.size() > 0) {
-
-                    // log("There is activity. Resetting activeCycles count.");
-                    //
-                    // reset activeCycles.
-                    //
-                    _activeCycles = 0;
-                    lastActivity = new Date();
-
-                    log("Preparing for micro sleep...");
-                    sleep = MICRO_SLEEP;
-
-                } else {
-
-                    //
-                    // If we've exceeded the active cycle threshold
-                    // become "inactive" for long sleep.
-                    //
-                    if(_activeCycles >= INACTIVITY_THRESHOLD) {
-                        // Default sleep time between checking for games.
-                        log("Preparing for long sleep...");
-                        sleep = LONG_SLEEP;
-                    } else {
-                        log("Preparing for short sleep...");
-                    }
-
-                }
-
-
-                //
                 // log stats
                 //
                 log("");
-                log("Banned subs:   [" + getBanListAsString() + "]");
                 log("Games started: " + _gamesStarted );
                 log("Games played:  " + _gamesPlayed );
                 log("Running since: " + DATE_FORMAT.format(_startTime) );
                 log("Last activity: " + DATE_FORMAT.format(lastActivity) );
 
                 log("Sleeping...");
-                sleep(sleep);
-
-                _activeCycles++;
+                sleep(SLEEP);
 
             } catch(RateLimitException rle) {
 
@@ -363,14 +307,6 @@ public class BlackjackBot extends AbstractCasinoBot
         // This is a crawler hit, so we are starting a new game.
         //
 
-        //
-        // Are we banned from the subreddit? If yes, skip it.
-        //
-        if(_banList.contains(thing.getSubreddit())) {
-            log("Ignoring request in BANNED sub " + thing.getSubreddit());
-            return;
-        }
-
         if(!commonCrawlerEventChecks(thing)) {
             // Common crawler event checks have failed. 
             // We do not want to reply to this post or submission.
@@ -383,7 +319,7 @@ public class BlackjackBot extends AbstractCasinoBot
             Comment comment = (Comment)thing;
             if(comment.getBody() != null) {
                 body = ((Comment)comment).getBody().toLowerCase();
-                log("Starting game from comment with: " + body);
+                log("Starting poker game from comment with: " + body);
             }
         }
 
@@ -393,7 +329,7 @@ public class BlackjackBot extends AbstractCasinoBot
                 submission.getSelftext() != null) {
                             
                 body = submission.getSelftext().toLowerCase();
-                log("Starting game from submission with: " + body);
+                log("Starting poker game from submission with: " + body);
             }
         }
 
@@ -405,23 +341,15 @@ public class BlackjackBot extends AbstractCasinoBot
         // Still allow for backwards compatibility and playing without 
         // betting in the casino.
         //
-        int bet = -1;
+        int bet = 1;
 
-        //
-        // Check for a bet only in subreddits in which we will 
-        // support that feature
-        //
-        if(CasinoCrawler.getCrawler().containsSubreddit(thing.getSubreddit())) {
-
-            String pattern = "blackjack(bot)? (\\d+)";
-            Pattern r = Pattern.compile(pattern);
-            Matcher m = r.matcher(body);
-            if(m.find()) {
-                try {
-                    bet = Integer.parseInt(m.group(2));
-                } catch(NumberFormatException nfe) {
-    
-                }
+        String pattern = "videopoker(bot)? (\\d+)";
+        Pattern r = Pattern.compile(pattern);
+        Matcher m = r.matcher(body);
+        if(m.find()) {
+            try {
+                bet = Integer.parseInt(m.group(2));
+            } catch(NumberFormatException nfe) {
             }
         }
 
@@ -429,50 +357,27 @@ public class BlackjackBot extends AbstractCasinoBot
 
         String message = "";
 
-        log("Starting new game with user " + author + " bet " + bet);
+        log("Starting new poker game with user " + author + " bet " + bet);
 
         Object dbLock = PersistenceUtils.getDatabaseLock();
         synchronized(dbLock) {
 
             boolean sufficientFunds = false;
 
-            int bal = -1;
-            if(bet != -1) {
-                bal = PersistenceUtils.getBankBalance(author);
-            }
+            int bal = PersistenceUtils.getBankBalance(author);
 
-            if(bet == -1 || bal >= bet) {
-
+            if(bal >= bet) {
 
                 //
-                // Get the dealer's hand
+                // Create the player's hand
                 //
-                BlackjackHand dealerHand = 
-                    new BlackjackHand( 
-                            new BlackjackCard[] { _engine.dealCard() } );
-         
-                //
-                // Get the player's hand
-                //
-                BlackjackHand playerHand = (BlackjackHand)_engine.dealHand();
-        
+                Hand hand = _engine.dealHand();
+
                 //
                 // Create message for player
                 //
-                message = createGameOutput( dealerHand, playerHand, 
-                                            author, bet);
+                message = createGameOutput( hand, author, bet);
            
-                //
-                // See if we just dealt them a blackjack.
-                // If yes, they win.
-                // Append message to player with winner info.
-                //
-                if(playerHand.isBlackjack()) {
-                    message += "    ...  \n";
-                    message += "    Game over. You win!  \n";
-                    PersistenceUtils.setBankBalance(author, bal + (bet*2) );
-                }
-                
                 sufficientFunds = true;
 
             } else {
@@ -491,16 +396,8 @@ public class BlackjackBot extends AbstractCasinoBot
             //
             try {
 
-                if(bet != -1 && sufficientFunds) {
+                if(sufficientFunds) {
                     PersistenceUtils.setBankBalance(author, bal-bet);
-                }
-
-                if(bet == -1) {
-                    //
-                    // Don't pass author to sendComment() if we are not
-                    // playing for credits.
-                    //
-                    author = null;
                 }
 
                 sendComment(thing, message, author);
@@ -511,10 +408,14 @@ public class BlackjackBot extends AbstractCasinoBot
 
                 log("Ignoring deleted item... " + thing);
 
-            } catch(BannedUserException ioe) {
+            } catch(BannedUserException bue) {
 
+                //
+                // This shouldn't happen as we should only be
+                // responding in the casino sub
+                //
                 String subreddit = thing.getSubreddit();
-                addBan(subreddit);
+                log("Banned from " + subreddit);
 
             } catch(IOException ioe) {
 
@@ -551,7 +452,7 @@ public class BlackjackBot extends AbstractCasinoBot
             return;
         }
 
-        log("Continuing " + messages.size() + " existing game(s)...");
+        log("Continuing " + messages.size() + " existing poker game(s)...");
         
         for(Message message: messages) {
             
@@ -582,25 +483,10 @@ public class BlackjackBot extends AbstractCasinoBot
                 continue;
             }
 
-            log("Checking subreddit " + message.getSubreddit());
-
-            //
-            // Are we banned from here? If yes, skip it.
-            //
-            String subreddit = message.getSubreddit();
-            if( subreddit != null && _banList.contains(subreddit) ) {
-
-                log("Ignoring reply in BANNED sub " + subreddit);
-
-                Messages.markAsRead(_user, message);
-                continue;
-            }
-
-
             String parentId = message.getParentId();
             String body = message.getBody().toLowerCase().trim();
 
-            if(subreddit == null) {
+            if(message.getSubreddit() == null) {
 
                 //
                 // This is probably a PM. Could also check for t4 kind
@@ -718,7 +604,10 @@ public class BlackjackBot extends AbstractCasinoBot
                 // 
                 // We must not be playing a game for credits.
                 //
-                log("Playing game without credit bet for:\n" + parentBody);
+                log("ERROR Playing game without credit bet:\n" + parentBody);
+               
+                Messages.markAsRead(_user, message);
+                continue;
 
             } else {
 
@@ -743,238 +632,101 @@ public class BlackjackBot extends AbstractCasinoBot
                 }
             }
 
-            BlackjackHand dealerHand = parseHand(   parent.getBody(),
-                                                    PARSE_DEALER_SECTION); 
-            BlackjackHand playerHand = parseHand(   parent.getBody(),
-                                                    PARSE_PLAYER_SECTION); 
-
-            log("Playing game " + "(" + message.getSubreddit() + ")" );
-            log("   " + dealerHand);
+            PokerHand playerHand = parseHand(parent.getBody());
+                                                    
+            log("Playing poker game " + "(" + message.getSubreddit() + ")" );
             log("   " + playerHand);
 
+            pattern = "((x|o){5})";
+            Pattern regex = Pattern.compile(pattern);
+            Matcher matcher = regex.matcher(body);
+            
+            if(matcher.find()) {
 
-            // This is kludgy, but not going to bother right now with 
-            // more advanced natural language processing than this
-            // for now.
-           
-            if( body.equals("hit") ||
-                body.startsWith("hit") ||
-                body.indexOf("hit me") != -1) {
-
-                log("    Player hits.");
-
-                playerHand = (BlackjackHand)_engine.dealCard(playerHand);
-
-                String output = createGameOutput(   dealerHand, 
-                                                    playerHand,
-                                                    player,
-                                                    bet );
-                if(playerHand.isBusted()) {
-                    output += "    ...  \n";
-                    output += "    Game over. You lose.  \n";
+                //
+                // This is a valid command. Conclude the game.
+                //
+              
+                //
+                // Keep an exclude set of cards we have already dealt
+                // from the deck, so we do not deal them again.
+                //
+                Hand exclude = new PokerHand();
+                Card[] cards = playerHand.getCards();
+                for(Card card: cards) {
+                    exclude.add(card);
                 }
 
-                log("   " + dealerHand);
-                log("   " + playerHand);
-
                 //
-                // Reply to player
+                // Remove the cards user wants to discard.
                 //
-                try {
-
-                    if(bet == -1) {
-                        // Don't send player info to sendComment() if
-                        // we are not playing for credits.
-                        player = null;
+                String command = matcher.group(1);
+                for(int i = 0; i < 5; i++) {
+                    if(command.getBytes()[i] == 'x') {
+                        // Debug
+                        log("User keeps " + cards[i]);
+                    } else {
+                        cards[i] = null;
                     }
-
-                    sendComment(message, output, player);
-                    if(bet != -1) {
-                        PersistenceUtils.setBotReplied( BOT_NAME, 
-                                                        parent.getName());
-                    }
-                    PersistenceUtils.setBotReplied(BOT_NAME, message.getName());
-                    _gamesPlayed++;
-
-                } catch(DeletedCommentException dce) {
-
-                    log("Ignoring deleted comment... " + message);
-
-                } catch(BannedUserException ioe) {
-
-                    addBan(subreddit);
-                } 
-
-                //
-                // We are done.
-                // Mark this message as read.
-                //
-                Messages.markAsRead(_user, message);
-
-                //
-                // Continue to next game.
-                //
-                continue;
-            }
- 
-            // 
-            // Check for stay/stand
-            // 
-         
-            if( body.equals("stay") ||
-                body.equals("stand") ||
-                body.startsWith("stay") ||
-                body.startsWith("stand") ||
-                body.startsWith("thats good") ||
-                body.startsWith("that's good") ||
-                body.startsWith("thats enough") ||
-                body.startsWith("that's enough") ||
-                body.startsWith("im good") ||
-                body.startsWith("i'm good") ) {
-
-                log("    Player stays.");
-
-                //
-                // We'll player dealer stands on all 17's
-                // http://www.predictem.com/blackjack/dealer.php
-                //
-
-                //
-                // Flip dealer card.
-                //
-                dealerHand = (BlackjackHand)_engine.dealCard(dealerHand);
-                String output = createGameOutput(   dealerHand, 
-                                                    playerHand,
-                                                    player,
-                                                    bet );
-
-                log("   ...");
-                log("   " + dealerHand);
-                log("   " + playerHand);
-
-                while(!dealerHand.isBusted()) {
-                    //
-                    // Check the current state of the dealer's hand.
-                    // If they have 17 or more, stop hitting, break
-                    // and check scores.
-                    //
-                    if(dealerHand.getValues()[0].intValue() >= 17) {
-                        break;
-                    }
-
-                    //
-                    // Reached here. Dealer must hit.
-                    //
-                    output += "    ...  \n";
-                    output += "    Dealer must hit.  \n";
-                    output += "    ...  \n";
-
-                    dealerHand = (BlackjackHand)_engine.dealCard(dealerHand);
-                    output += createGameOutput( dealerHand, 
-                                                playerHand,
-                                                null,
-                                                -1 );
-                    
-                    log("   ...");
-                    log("   " + dealerHand);
-                    log("   " + playerHand);
                 }
 
-                if(dealerHand.isBusted()) {
-                    //
-                    // Dealer busts
-                    //
+                //
+                // Now deal any cards we have null'ed out.
+                // Keeping track of all the cards we need to exclude.
+                //
+                for(int i = 0; i < cards.length; i++) {
+                    if(cards[i] == null) {
+                        cards[i] = _engine.dealCard(exclude);
+                        exclude.add(cards[i]);
+                    }
+                }
+
+                playerHand = new PokerHand( cards );
+
+                String output = createGameOutput(   playerHand, 
+                                                    player, 
+                                                    bet     );
+
+                if(playerHand.isWinner()) {
+                    int multiplier = playerHand.getWinType();
                     output += "    ...  \n";
-                    output += "    Game over. You win!  \n";
+                    output += "    You win!  \n";
+                    output += "    Payout " + 
+                                    (bet*multiplier) + " credit(s)  \n";
 
                     Object dbLock = PersistenceUtils.getDatabaseLock();
-                    if(bet != -1) {
-                        synchronized(dbLock) {
-                            int oldBal = PersistenceUtils.getBankBalance(
-                                                                player );
-                            PersistenceUtils.setBankBalance(player, 
-                                                            oldBal + (bet*2));
-                        }
+                    synchronized(dbLock) {
+                        int bal = PersistenceUtils.getBankBalance(player);
+                        PersistenceUtils.setBankBalance(
+                                                    player, 
+                                                    bal + (bet*multiplier) );
                     }
 
                 } else {
-                    //
-                    // Check scores.
-                    //
-                    int playerVal = playerHand.getValues()[0].intValue();
-                    int dealerVal = dealerHand.getValues()[0].intValue();
-                    if(playerVal == dealerVal) {
 
-                        // Push
-
-                        output += "    ...  \n";
-                        output += "    Game over. Push.  \n";
-
-                        Object dbLock = PersistenceUtils.getDatabaseLock();
-                        if(bet != -1) {
-                            synchronized(dbLock) {
-                                int oldBal = PersistenceUtils.getBankBalance(
-                                                                player );
-                                PersistenceUtils.setBankBalance(player, 
-                                                            oldBal + (bet));
-                            }
-                        }
-
-                    } else {
-
-                        // Player wins
-
-                        if(playerVal > dealerVal) {
-                            output += "    ...  \n";
-                            output += "    Game over. You win!  \n";
-                   
-                            Object dbLock = PersistenceUtils.getDatabaseLock();
-                            if(bet != -1) {
-                                synchronized(dbLock) {
-                                    int oldBal = 
-                                        PersistenceUtils.getBankBalance(
-                                                                player );
-                                    PersistenceUtils.setBankBalance(player, 
-                                                            oldBal + (bet*2));
-                                }
-                            }
-
-                        } else {
-
-                            // Player loses
-
-                            output += "    ...  \n";
-                            output += "    Game over. You lose.  \n";
-                        }
-                    }
+                    output += "    ...  \n";
+                    output += "    You lose.  \n";
                 }
 
-                //
-                // Send the output game state to the user.
-                //
                 try {
                     
-                    if(bet == -1) {
-                        // Don't send player to sendCOmment() if we are
-                        // not playing for credits.
-                        player = null;
-                    }
-
                     sendComment(message, output, player);
-                    if(bet != -1) {
-                        PersistenceUtils.setBotReplied( BOT_NAME, 
-                                                        parent.getName());
-                    }
+                    PersistenceUtils.setBotReplied( BOT_NAME, parent.getName());
                     PersistenceUtils.setBotReplied(BOT_NAME, message.getName());
                     _gamesPlayed++;
-
+                
                 } catch(DeletedCommentException dce) {
 
                     log("Ignoring deleted comment... " + message);
 
-                } catch(BannedUserException ioe) {
-
-                    addBan(subreddit);
+                } catch(BannedUserException bue) {
+                
+                    //
+                    // This shouldn't happen as we should only be
+                    // responding in the casino sub
+                    //
+                    String subreddit = message.getSubreddit();
+                    log("Banned from " + subreddit);
 
                 } 
 
@@ -989,48 +741,44 @@ public class BlackjackBot extends AbstractCasinoBot
                 //
                 continue;
  
-            }
 
-            //
-            // TODO add split? add double down? etc...
-            //
+            }
 
             log("    Unknown command.");
 
             //
-            // No supported actions (hit, stay) were detected.
+            // No supported actions were detected.
             // Send the output 
             //
-            String output = createGameOutput(   dealerHand, 
-                                                playerHand, 
+            String output = createGameOutput(   playerHand, 
                                                 player, 
                                                 bet         );
             output += "    ...  \n";
             output += "    Sorry, I don't understand. " +
-                        "Try 'hit' or 'stand'.  \n";
+                "    Send a string of five x's or o's next to eachother.  \n" +
+                "    Use x to indicate hold and y to indicate discard.  \n" +
+                "    E.g. xxxoo holds the first three cards.  \n";
+
             
             try {
 
-                if(bet == -1) {
-                    // Don't send player info to sendComment() if
-                    // we are not playing for credits.
-                    player = null;
-                }
-
                 sendComment(message, output, player);
-                if(bet != -1) {
-                    PersistenceUtils.setBotReplied( BOT_NAME, 
-                                                    parent.getName());
-                }
+                PersistenceUtils.setBotReplied( BOT_NAME, parent.getName());
                 PersistenceUtils.setBotReplied(BOT_NAME, message.getName());
 
             } catch(DeletedCommentException dce) {
 
                 log("Ignoring deleted comment... " + message);
 
-            } catch(BannedUserException ioe) {
+            } catch(BannedUserException bue) {
+     
+                //
+                // This shouldn't happen as we should only be
+                // responding in the casino sub
+                //
+                String subreddit = message.getSubreddit();
+                log("Banned from " + subreddit);
 
-                addBan(subreddit);
 
             } 
 
@@ -1045,32 +793,27 @@ public class BlackjackBot extends AbstractCasinoBot
 
     }
 
-    private static final int PARSE_DEALER_SECTION = 0;
-    private static final int PARSE_PLAYER_SECTION = 1;
-
     /**
      * @param text      Game text
-     * @param parseSec  The section of the text to parse. Either one of
-     *                  PARSE_DEALER_SECTION or PARSE_PLAYER_SECTION
      */
-    private BlackjackHand parseHand(String text, int parseSec) {
-        String line = 
-            text.split("\\r?\\n")[parseSec].split(": ")[1].split(" \\(")[0];
+    private PokerHand parseHand(String text) {
+        String line = text.split("\\r?\\n")[0].split(": ")[1];
        
-        String[] strCards = null;
+        Card[] cards = new PokerCard[5];
 
-        if( line.startsWith(CARD_BACK) ||
-            line.startsWith("▩▩") ||
-            line.startsWith("██") ||
-            line.startsWith("??") ) {
-
-            line = line.split(" ")[1];
-            strCards = new String[] { line };
-        } else {
-            strCards = line.split(" ");
+        String pattern = "((\\d+|[JQKA])\\S)";
+        Pattern r = Pattern.compile(pattern);
+        Matcher m = r.matcher(line);
+        for(int i = 0; i < 5; i++) {
+            if(m.find()) {
+                cards[i] = new PokerCard(m.group(1));
+            } else {
+                // This is an error
+                log("Parse error on: " + text);
+            }
         }
 
-        return (BlackjackHand)_engine.parseCards(strCards);
+        return new PokerHand( cards );
     }
 
     /**
@@ -1078,17 +821,12 @@ public class BlackjackBot extends AbstractCasinoBot
      * Draw the board. This will be the text of the post 
      * we reply to the user with.
      */
-    private String createGameOutput(Hand dealerHand, 
-                                    Hand playerHand, 
-                                    String player,
-                                    int bet ) {
+    private String createGameOutput(    Hand playerHand, 
+                                        String player,
+                                        int bet ) {
 
         String ret = "";
-        if(dealerHand.getCards().length == 1) {
-            ret += "    Dealer hand: " + CARD_BACK + " " + dealerHand + "  \n";
-        } else {
-            ret += "    Dealer hand: " + dealerHand + "  \n";
-        }
+
         ret += "    Player hand: " + playerHand + "  \n";
 
         if( player != null && bet != -1 ) {
@@ -1127,41 +865,11 @@ public class BlackjackBot extends AbstractCasinoBot
 
         text += "\n\n" +
                 "----\n" +
-                "Commands: hit, stand | " +
+                "Commands: (x|o)*5 | E.g. xxxxx or xxxoo or xoxox. Use x to hold, use o to discard. | " +
                 "[Visit Casino](/r/RoboCasino) | " +
                 "[Contact My Human](http://www.reddit.com/message/compose/?to=BlackjackPitboss)    ";
-                // +
-                // "\n\n" +
-                // "^^Please ^^remember ^^to ^^tip ^^your ^^dealer  \n";
 
         Comments.comment(_user, thing, text);
-    }
-
-    /**
-     *
-     * Add a subreddit to our ban set.
-     *
-     */
-    private synchronized void addBan(String subreddit) {
-        log("Adding ban for: " + subreddit);
-        _banList.add(subreddit);
-
-        PersistenceUtils.saveList(BANS_FILE, _banList);
-    }
-
-    /**
-     * Return a String representation of the ban set.
-     */
-    private String getBanListAsString() {
-        String ret = "";
-        for(String subreddit: _banList) {
-            if(ret.equals("")) {
-                ret = subreddit;
-            } else {
-                ret += ", " + subreddit;
-            }
-        }
-        return ret;
     }
 
 

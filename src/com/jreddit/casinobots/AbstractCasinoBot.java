@@ -31,12 +31,17 @@ public abstract class AbstractCasinoBot extends BaseBot  {
     //
     protected Crawler _crawler;
 
-    protected Date _startDate;
+    protected Date _replyAfterDate;
 
     //
     // The list of users this bot should not reply to.
     //
     protected List<String> _ignoreUsers = new ArrayList<String>();
+
+    // For logging times.
+    protected static DateFormat DATE_FORMAT =
+                            new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+
 
     /**
      *
@@ -64,7 +69,7 @@ public abstract class AbstractCasinoBot extends BaseBot  {
         // Fall back to using "new Date()" if this bot has never 
         // replied to anyone
         //
-        _startDate = new Date();
+        _replyAfterDate = new Date();
         try {
             List<Comment> comments = Comments.getUserComments(
                                             _user,
@@ -74,7 +79,7 @@ public abstract class AbstractCasinoBot extends BaseBot  {
                 Comment comment = comments.get(0);
                 Date d = comment.getCreatedDate();
                 if(d != null) {
-                    _startDate = d;
+                    _replyAfterDate = d;
                 }
             }
         } catch( IOException ioe) {
@@ -105,13 +110,13 @@ public abstract class AbstractCasinoBot extends BaseBot  {
 
         //
         // Ignore posts which were created prior to our last comment.
-        // _startDate is the earliest date of a post we shoudl reply to.
+        // _replyAfterDate is the earliest date of a post we should reply to.
         //
         Date d = thing.getCreatedDate();
         if(d == null) {
             return false;
         }
-        if(d.before(_startDate)) {
+        if(d.before(_replyAfterDate)) {
             //
             // In the event that the database was destroyed since
             // last start, ignore these messages in order to avoid
