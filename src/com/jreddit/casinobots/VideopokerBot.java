@@ -91,25 +91,25 @@ public class VideopokerBot extends AbstractCasinoBot
         }
 
         //
-        //  TODO user a temp crawler for now.
+        //  
         //
-        // _crawler = CasinoCrawler.getCrawler();
+        _crawler = CasinoCrawler.getCrawler();
        
 
         //
         // TODO don't use test crawler.
         //
-        List<String> subReddits = new ArrayList<String>();
-        subReddits.add("BlackjackBot");
-        _crawler = new Crawler(
-                                _user,
-                                "TEST_CRAWLER",
-                                subReddits,
-                                new Submissions.ListingType[] {
-                                        Submissions.ListingType.HOT,
-                                        Submissions.ListingType.NEW },
-                                10,
-                                10  );
+        // List<String> subReddits = new ArrayList<String>();
+        // subReddits.add("BlackjackBot");
+        // _crawler = new Crawler(
+        //                        _user,
+        //                        "TEST_CRAWLER",
+        //                        subReddits,
+        //                        new Submissions.ListingType[] {
+        //                                Submissions.ListingType.HOT,
+        //                                Submissions.ListingType.NEW },
+        //                        10,
+        //                        10  );
 
 
         //
@@ -343,12 +343,12 @@ public class VideopokerBot extends AbstractCasinoBot
         //
         int bet = 1;
 
-        String pattern = "videopoker(bot)? (\\d+)";
+        String pattern = "(video)?poker(bot)? (\\d+)";
         Pattern r = Pattern.compile(pattern);
         Matcher m = r.matcher(body);
         if(m.find()) {
             try {
-                bet = Integer.parseInt(m.group(2));
+                bet = Integer.parseInt(m.group(3));
             } catch(NumberFormatException nfe) {
             }
         }
@@ -416,6 +416,23 @@ public class VideopokerBot extends AbstractCasinoBot
                 //
                 String subreddit = thing.getSubreddit();
                 log("Banned from " + subreddit);
+
+            } catch(RateLimitException rle) {
+
+                //
+                // TODO big todo....
+                //
+                // Handle a retry here....
+                
+                log("Caught RateLimitException: " + rle.getMessage());
+
+                int sleepSecs = rle.getRetryTime();
+
+                log("Sleeping " + sleepSecs +
+                    " seconds to recover from rate limit exception...");
+
+                sleep(sleepSecs);
+                return;
 
             } catch(IOException ioe) {
 
@@ -690,7 +707,7 @@ public class VideopokerBot extends AbstractCasinoBot
                 if(playerHand.isWinner()) {
                     int multiplier = playerHand.getWinType();
                     output += "    ...  \n";
-                    output += "    You win!  \n";
+                    output += "    Game over. You win!  \n";
                     output += "    Payout " + 
                                     (bet*multiplier) + " credit(s)  \n";
 
@@ -705,7 +722,7 @@ public class VideopokerBot extends AbstractCasinoBot
                 } else {
 
                     output += "    ...  \n";
-                    output += "    You lose.  \n";
+                    output += "    Game over. You lose.  \n";
                 }
 
                 try {

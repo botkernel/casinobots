@@ -470,7 +470,13 @@ public class BlackjackBot extends AbstractCasinoBot
                 if(playerHand.isBlackjack()) {
                     message += "    ...  \n";
                     message += "    Game over. You win!  \n";
-                    PersistenceUtils.setBankBalance(author, bal + (bet*2) );
+      
+                    if(bet != -1) {
+                        int oldBal = PersistenceUtils.getBankBalance(
+                                                                author );
+                        PersistenceUtils.setBankBalance(author, 
+                                                            oldBal + (bet*2));
+                    }
                 }
                 
                 sufficientFunds = true;
