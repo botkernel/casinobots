@@ -357,7 +357,13 @@ public class BlackjackBot extends AbstractCasinoBot
      * This should be a new game request.
      *
      */
-    public void handleCrawlerEvent(Thing thing) {
+    public void handleCrawlerEvent(CrawlerEvent event) {
+
+        if(event.getType() != CrawlerEvent.CRAWLER_MATCH) {
+            return;
+        }
+
+        Thing thing = event.getSource();
 
         // 
         // This is a crawler hit, so we are starting a new game.
