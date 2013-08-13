@@ -691,8 +691,22 @@ public class BlackjackBot extends AbstractCasinoBot
 
             log("Checking for finished game.");
 
-            if( parentBody != null &&
-                parentBody.indexOf("Game over.") != -1) {
+            if( parentBody == null ) {
+                log("Skipping empty game for " + message);
+                Messages.markAsRead(_user, message);
+                continue;
+            }
+
+            if( parentBody.indexOf("Dealer hand:") == -1) {
+                //
+                // Not a game.
+                //
+                log("Skipping message (not a game) for " + message);
+                Messages.markAsRead(_user, message);
+                continue;
+            }
+
+            if( parentBody.indexOf("Game over.") != -1) {
 
                 //
                 // This game is ended. Why are they still replying to us?
