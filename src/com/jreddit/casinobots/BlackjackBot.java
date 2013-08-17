@@ -660,6 +660,7 @@ public class BlackjackBot extends AbstractCasinoBot
                             crawler.addListener(this);
                             crawler.addMatchCriteria(_criteria);
                             BotKernel.getBotKernel().addCrawler(crawler);
+                            crawler.wake();
                         } else {
                             log("WARN cannot find crawler " + crawlerName);
                         }
