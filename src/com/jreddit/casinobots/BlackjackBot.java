@@ -65,6 +65,10 @@ public class BlackjackBot extends AbstractCasinoBot
 
     private List<String> _banList;
 
+    private String _owner;
+
+    private CrawlerMatchCriteria _criteria;
+
     //
     // Stats for this run
     //
@@ -103,6 +107,8 @@ public class BlackjackBot extends AbstractCasinoBot
 
         initProps(props);
 
+        _owner = props.getProperty("owner");
+
         _engine = new BlackjackEngine();
 
         _startTime      = new Date();
@@ -132,7 +138,7 @@ public class BlackjackBot extends AbstractCasinoBot
         // Create a match criteria for the crawler to notify us
         // when we need to respond to a post.
         //
-        CrawlerMatchCriteria criteria = new CrawlerMatchCriteria() {
+        _criteria = new CrawlerMatchCriteria() {
                 
                 public boolean match(Thing thing) {
 
@@ -196,7 +202,7 @@ public class BlackjackBot extends AbstractCasinoBot
         //
         // Add out match criteria to the crawler.
         //
-        _crawler.addMatchCriteria(criteria);
+        _crawler.addMatchCriteria(_criteria);
 
         //
         // Register the crawler with the kernel.
@@ -359,6 +365,23 @@ public class BlackjackBot extends AbstractCasinoBot
      */
     public void handleCrawlerEvent(CrawlerEvent event) {
 
+        //
+        // See if we need to detach from a non casino crawler
+        //
+        if(event.getType() == CrawlerEvent.CRAWLER_COMPLETE) {
+            Crawler crawler = event.getCrawler();
+            if(!CasinoCrawler.getCrawler().getName().equals(crawler.getName())) {
+                // This is not the casino crawler. 
+                // detach from this crawler since it has completed.
+                crawler.removeListener(this);
+            }
+            return;
+        }
+
+        //
+        // All code below this handles matches only. For any other
+        // crawl event, just return here.
+        //
         if(event.getType() != CrawlerEvent.CRAWLER_MATCH) {
             return;
         }
@@ -612,27 +635,36 @@ public class BlackjackBot extends AbstractCasinoBot
             String parentId = message.getParentId();
             String body = message.getBody().toLowerCase().trim();
 
-            if(subreddit == null) {
-
+            if( subreddit == null &&
+                message.getKind().equals(Thing.KIND_MESSAGE)) {
                 //
-                // This is probably a PM. Could also check for t4 kind
-                // thing.getKind() == KIND_MESSAGE
-                // parent will not be null if it is a reply to another 
-                // PM. I.e. part of a PM conversation, only initial PM has
-                // no parent id.
-
+                // Accept commands from bot owner
                 //
-                // Enhancement: allow communication with the bot
-                // over PM. E.g.
-                // "addsub <subreddit>"
-                //
+                if( _owner != null &&
+                    message.getAuthor() != null &&
+                    message.getAuthor().equals(_owner) ) {
+          
+                    log("INFO command message: " + message.getBody());
 
-                // Could be a banned message. E.g.
-                // "you have been banned from posting to [/r/IAmA:"
-                // "/r/WTF"
-                // Should try to parse this and remove the subreddit from
-                // our crawl??? We already handle the 
-                // 403 BannedUserException so maybe this is not necessary.
+                    String[] commands = message.getBody().trim().split(" ");
+                    
+                    log("INFO command length:  " + commands.length);
+
+                    if( commands.length == 2 &&
+                        commands[0].equals("crawl") ) {
+
+                        String crawlerName = commands[1];
+                        Crawler crawler = CrawlerFactory.getCrawler(crawlerName);
+                        if(crawler != null) {
+                            log("INFO adding crawler " + crawler.getName());
+                            crawler.addListener(this);
+                            crawler.addMatchCriteria(_criteria);
+                            BotKernel.getBotKernel().addCrawler(crawler);
+                        } else {
+                            log("WARN cannot find crawler " + crawlerName);
+                        }
+                    }
+                }
 
                 Messages.markAsRead(_user, message);
                 continue;
