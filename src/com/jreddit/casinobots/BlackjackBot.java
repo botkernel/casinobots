@@ -1187,6 +1187,7 @@ public class BlackjackBot extends AbstractCasinoBot
                 "----\n" +
                 "Commands: hit, stand | " +
                 "[Visit Casino](/r/RoboCasino) | " +
+                "[FAQ](http://www.reddit.com/r/RoboCasino/wiki/faq) | " +
                 "[Contact My Human](http://www.reddit.com/message/compose/?to=BlackjackPitboss)    ";
                 // +
                 // "\n\n" +
