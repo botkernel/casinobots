@@ -646,6 +646,74 @@ public class BlackjackBot extends AbstractCasinoBot
           
                     log("INFO command message: " + message.getBody());
 
+                                   //
+                    // Get the comment or submission we are to reply to.
+                    //
+                    String pattern = "(http(s)?:\\/\\/([^\\s]+))\\/comments\\/(\\w+)(\\/\\w+\\/?(\\w+)?)?(\\/)?(\\s+)?";
+                    Pattern r = Pattern.compile(pattern);
+                    Matcher m = r.matcher(body);
+
+                    if(m.find()) {
+                        log("INFO Matched URL " + body);
+
+                        String submission = m.group(4);     // Submission
+                        String comment = m.group(6);     // Comment
+                        Thing replyTo = null;
+
+                        try {
+                            if(submission != null && comment == null) {
+                                replyTo = Submissions.getSubmission(
+                                    _user, Thing.KIND_LINK + "_" + submission);
+                            }
+                            if(submission != null && comment != null) {
+                                replyTo = Comments.getComment(
+                                    _user, Thing.KIND_COMMENT + "_" + comment);
+                            }
+                            if(replyTo != null) {
+                                log("INFO Replying to " + replyTo);
+                                //
+                                // Start a game from the permalink
+                                //
+                               
+                                //
+                                // Get the dealer's hand
+                                //
+                                BlackjackHand dealerHand = 
+                                    new BlackjackHand( 
+                                            new BlackjackCard[] { _engine.dealCard() } );
+         
+
+                                //
+                                // Get the player's hand
+                                //
+                                BlackjackHand playerHand = (BlackjackHand)_engine.dealHand();
+                                //
+                                // Ensure we do not deal a blackjack 
+                                // automatically for URL requests
+                                //
+                                while(playerHand.isBlackjack()) {
+                                    playerHand = (BlackjackHand)_engine.dealHand();
+                                }
+        
+                                //
+                                // Create message for player
+                                //
+                                String text = createGameOutput( 
+                                                dealerHand, playerHand, 
+                                                (String)null, -1);
+
+                                sendComment(replyTo, text, (String)null);
+                            }
+                        } catch (BannedUserException bue) {
+                            addBan(replyTo.getSubreddit());
+                        } catch (IOException ioe) {
+                            ioe.printStackTrace();
+                        }
+ 
+                        Messages.markAsRead(_user, message);
+                        continue;
+                    } 
+
                     String[] commands = message.getBody().trim().split(" ");
                     
                     log("INFO command length:  " + commands.length);
